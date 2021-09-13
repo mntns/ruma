@@ -1,10 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    sync::{
-        atomic::{AtomicU64, Ordering::SeqCst},
-        Arc,
-    },
+    sync::atomic::{AtomicU64, Ordering::SeqCst},
 };
 
 use js_int::uint;
@@ -27,11 +24,7 @@ pub use event::StateEvent;
 
 static SERVER_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
 
-pub fn do_check(
-    events: &[Arc<StateEvent>],
-    edges: Vec<Vec<EventId>>,
-    expected_state_ids: Vec<EventId>,
-) {
+pub fn do_check(events: &[StateEvent], edges: Vec<Vec<EventId>>, expected_state_ids: Vec<EventId>) {
     // To activate logging use `RUST_LOG=debug cargo t`
     // The logger is initialized in the `INITIAL_EVENTS` function.
 
@@ -68,17 +61,18 @@ pub fn do_check(
     }
 
     // event_id -> StateEvent
-    let mut event_map: HashMap<EventId, Arc<StateEvent>> = HashMap::new();
+    let mut event_map: HashMap<EventId, StateEvent> = HashMap::new();
     // event_id -> StateMap<EventId>
     let mut state_at_event: HashMap<EventId, StateMap<EventId>> = HashMap::new();
 
     // Resolve the current state and add it to the state_at_event map then continue
     // on in "time"
-    for node in crate::lexicographical_topological_sort(&graph, |id| {
+    let sorted = crate::lexicographical_topological_sort(&graph, |id| {
         Ok((0, MilliSecondsSinceUnixEpoch(uint!(0)), id.clone()))
     })
-    .unwrap()
-    {
+    .unwrap();
+
+    for node in sorted {
         let fake_event = fake_event_map.get(&node).unwrap();
         let event_id = fake_event.event_id().clone();
 
@@ -112,7 +106,7 @@ pub fn do_check(
 
             let resolved =
                 crate::resolve(&RoomVersionId::Version6, state_sets, auth_chain_sets, |id| {
-                    event_map.get(id).map(Arc::clone)
+                    event_map.get(id)
                 });
             match resolved {
                 Ok(state) => state,
@@ -159,7 +153,7 @@ pub fn do_check(
         store.0.insert(ev_id.clone(), event.clone());
 
         state_at_event.insert(node, state_after);
-        event_map.insert(event_id.clone(), Arc::clone(store.0.get(&ev_id).unwrap()));
+        event_map.insert(event_id.clone(), store.0.get(&ev_id).unwrap().clone());
     }
 
     let mut expected_state = StateMap::new();
@@ -198,13 +192,12 @@ pub fn do_check(
 }
 
 #[allow(clippy::exhaustive_structs)]
-pub struct TestStore<E: Event>(pub HashMap<EventId, Arc<E>>);
+pub struct TestStore<E: Event>(pub HashMap<EventId, E>);
 
 impl<E: Event> TestStore<E> {
-    pub fn get_event(&self, _: &RoomId, event_id: &EventId) -> Result<Arc<E>> {
+    pub fn get_event(&self, _: &RoomId, event_id: &EventId) -> Result<&E> {
         self.0
             .get(event_id)
-            .map(Arc::clone)
             .ok_or_else(|| Error::NotFound(format!("{} not found", event_id.to_string())))
     }
 
@@ -247,7 +240,7 @@ impl TestStore<StateEvent> {
             &[],
         );
         let cre = create_event.event_id().clone();
-        self.0.insert(cre.clone(), Arc::clone(&create_event));
+        self.0.insert(cre.clone(), create_event.clone());
 
         let alice_mem = to_pdu_event(
             "IMA",
@@ -258,7 +251,7 @@ impl TestStore<StateEvent> {
             &[cre.clone()],
             &[cre.clone()],
         );
-        self.0.insert(alice_mem.event_id().clone(), Arc::clone(&alice_mem));
+        self.0.insert(alice_mem.event_id().clone(), alice_mem.clone());
 
         let join_rules = to_pdu_event(
             "IJR",
@@ -370,12 +363,12 @@ pub fn to_init_pdu_event(
     ev_type: EventType,
     state_key: Option<&str>,
     content: JsonValue,
-) -> Arc<StateEvent> {
+) -> StateEvent {
     let ts = SERVER_TIMESTAMP.fetch_add(1, SeqCst);
     let id = if id.contains('$') { id.to_owned() } else { format!("${}:foo", id) };
 
     let state_key = state_key.map(ToOwned::to_owned);
-    Arc::new(StateEvent {
+    StateEvent {
         event_id: EventId::try_from(id).unwrap(),
         rest: Pdu::RoomV3Pdu(RoomV3Pdu {
             room_id: room_id(),
@@ -394,7 +387,7 @@ pub fn to_init_pdu_event(
             hashes: EventHash::new("".to_owned()),
             signatures: BTreeMap::new(),
         }),
-    })
+    }
 }
 
 pub fn to_pdu_event<S>(
@@ -405,7 +398,7 @@ pub fn to_pdu_event<S>(
     content: JsonValue,
     auth_events: &[S],
     prev_events: &[S],
-) -> Arc<StateEvent>
+) -> StateEvent
 where
     S: AsRef<str>,
 {
@@ -415,7 +408,7 @@ where
     let prev_events = prev_events.iter().map(AsRef::as_ref).map(event_id).collect::<Vec<_>>();
 
     let state_key = state_key.map(ToOwned::to_owned);
-    Arc::new(StateEvent {
+    StateEvent {
         event_id: EventId::try_from(id).unwrap(),
         rest: Pdu::RoomV3Pdu(RoomV3Pdu {
             room_id: room_id(),
@@ -434,12 +427,12 @@ where
             hashes: EventHash::new("".to_owned()),
             signatures: BTreeMap::new(),
         }),
-    })
+    }
 }
 
 // all graphs start with these input events
 #[allow(non_snake_case)]
-pub fn INITIAL_EVENTS() -> HashMap<EventId, Arc<StateEvent>> {
+pub fn INITIAL_EVENTS() -> HashMap<EventId, StateEvent> {
     vec![
         to_pdu_event::<EventId>(
             "CREATE",

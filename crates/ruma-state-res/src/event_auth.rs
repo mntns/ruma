@@ -227,14 +227,14 @@ pub fn auth_check<E: Event>(
 
         if !valid_membership_change(
             &target_user,
-            fetch_state(&EventType::RoomMember, target_user.as_str()).as_ref(),
+            fetch_state(&EventType::RoomMember, target_user.as_str()),
             sender,
-            sender_member_event.as_ref(),
+            sender_member_event,
             incoming_event.content(),
             prev_event,
             current_third_party_invite,
-            power_levels_event.as_ref(),
-            fetch_state(&EventType::RoomJoinRules, "").as_ref(),
+            power_levels_event,
+            fetch_state(&EventType::RoomJoinRules, ""),
         )? {
             return Ok(false);
         }
@@ -834,8 +834,6 @@ fn verify_third_party_invite(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use crate::{
         event_auth::valid_membership_change,
         test_utils::{
@@ -851,14 +849,11 @@ mod tests {
             tracing::subscriber::set_default(tracing_subscriber::fmt().with_test_writer().finish());
         let events = INITIAL_EVENTS();
 
-        let prev_event =
-            events.values().find(|ev| ev.event_id.as_str().contains("IMC")).map(Arc::clone);
+        let prev_event = events.values().find(|ev| ev.event_id.as_str().contains("IMC"));
 
         let auth_events = events
             .values()
-            .map(|ev| {
-                ((ev.event_type().to_owned(), ev.state_key().unwrap().to_owned()), Arc::clone(ev))
-            })
+            .map(|ev| ((ev.event_type().to_owned(), ev.state_key().unwrap().to_owned()), ev))
             .collect::<StateMap<_>>();
 
         let requester = to_pdu_event(
@@ -895,14 +890,11 @@ mod tests {
             tracing::subscriber::set_default(tracing_subscriber::fmt().with_test_writer().finish());
         let events = INITIAL_EVENTS();
 
-        let prev_event =
-            events.values().find(|ev| ev.event_id.as_str().contains("IMC")).map(Arc::clone);
+        let prev_event = events.values().find(|ev| ev.event_id.as_str().contains("IMC"));
 
         let auth_events = events
             .values()
-            .map(|ev| {
-                ((ev.event_type().to_owned(), ev.state_key().unwrap().to_owned()), Arc::clone(ev))
-            })
+            .map(|ev| ((ev.event_type().to_owned(), ev.state_key().unwrap().to_owned()), ev))
             .collect::<StateMap<_>>();
 
         let requester = to_pdu_event(

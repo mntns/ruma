@@ -58,7 +58,7 @@ pub fn resolve<'a, E, SSI>(
     fetch_event: impl Fn(&EventId) -> Option<E>,
 ) -> Result<StateMap<EventId>>
 where
-    E: Event + Clone,
+    E: Event + Clone + 'a,
     SSI: Iterator<Item = &'a StateMap<EventId>> + Clone,
 {
     info!("State resolution starting");
@@ -326,8 +326,8 @@ fn get_power_level_for_sender<E: Event>(
 
     for aid in event.as_ref().map(|pdu| pdu.auth_events()).into_iter().flatten() {
         if let Some(aev) = fetch_event(aid) {
-            if is_type_and_key(&aev, &EventType::RoomPowerLevels, "") {
-                pl = Some(aev);
+            if is_type_and_key(aev, &EventType::RoomPowerLevels, "") {
+                pl = Some(aev.clone());
                 break;
             }
         }
@@ -423,18 +423,15 @@ fn iterative_auth_check<E: Event + Clone>(
         // The key for this is (eventType + a state_key of the signed token not sender) so
         // search for it
         let current_third_party = auth_events.iter().find_map(|(_, pdu)| {
-            (*pdu.event_type() == EventType::RoomThirdPartyInvite).then(|| {
-                // TODO no clone, auth_events is borrowed while moved
-                pdu.clone()
-            })
+            (*pdu.event_type() == EventType::RoomThirdPartyInvite).then(|| *pdu)
         });
 
-        if auth_check(
+        if auth_check::<E, _>(
             room_version,
-            &event,
-            most_recent_prev_event.as_ref(),
-            current_third_party.as_ref(),
-            |ty, key| auth_events.get(&(ty.clone(), key.to_owned())).cloned(),
+            event,
+            most_recent_prev_event,
+            current_third_party,
+            |ty, key| auth_events.get(&(ty.clone(), key.to_owned())).copied(),
         )? {
             // add event to resolved state map
             resolved_state
@@ -481,7 +478,7 @@ fn mainline_sort<E: Event>(
         for aid in event.auth_events() {
             let ev = fetch_event(aid)
                 .ok_or_else(|| Error::NotFound(format!("Failed to find {}", aid)))?;
-            if is_type_and_key(&ev, &EventType::RoomPowerLevels, "") {
+            if is_type_and_key(ev, &EventType::RoomPowerLevels, "") {
                 pl = Some(aid.clone());
                 break;
             }
@@ -540,7 +537,7 @@ fn get_mainline_depth<E: Event>(
         for aid in sort_ev.auth_events() {
             let aev = fetch_event(aid)
                 .ok_or_else(|| Error::NotFound(format!("Failed to find {}", aid)))?;
-            if is_type_and_key(&aev, &EventType::RoomPowerLevels, "") {
+            if is_type_and_key(aev, &EventType::RoomPowerLevels, "") {
                 event = Some(aev);
                 break;
             }
@@ -606,10 +603,7 @@ fn is_power_event(event: impl Event) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{HashMap, HashSet},
-        sync::Arc,
-    };
+    use std::collections::{HashMap, HashSet};
 
     use js_int::uint;
     use maplit::{hashmap, hashset};
@@ -646,21 +640,19 @@ mod tests {
 
         let power_events = event_map
             .values()
-            .filter(|&pdu| is_power_event(&**pdu))
+            .filter(|&pdu| is_power_event(pdu))
             .map(|pdu| pdu.event_id.clone())
             .collect::<Vec<_>>();
 
         let sorted_power_events =
-            crate::reverse_topological_power_sort(power_events, &auth_chain, |id| {
-                events.get(id).map(Arc::clone)
-            })
-            .unwrap();
+            crate::reverse_topological_power_sort(power_events, &auth_chain, |id| events.get(id))
+                .unwrap();
 
         let resolved_power = crate::iterative_auth_check(
             &RoomVersion::version_6(),
             &sorted_power_events,
             HashMap::new(), // unconflicted events
-            |id| events.get(id).map(Arc::clone),
+            |id| events.get(id),
         )
         .expect("iterative auth check failed on resolved events");
 
@@ -672,8 +664,7 @@ mod tests {
         let power_level = resolved_power.get(&(EventType::RoomPowerLevels, "".to_owned()));
 
         let sorted_event_ids =
-            crate::mainline_sort(&events_to_sort, power_level, |id| events.get(id).map(Arc::clone))
-                .unwrap();
+            crate::mainline_sort(&events_to_sort, power_level, |id| events.get(id)).unwrap();
 
         assert_eq!(
             vec![
@@ -743,7 +734,7 @@ mod tests {
         let expected_state_ids =
             vec!["PA", "MA", "MB"].into_iter().map(event_id).collect::<Vec<_>>();
 
-        do_check(events, edges, expected_state_ids)
+        do_check(events, edges, expected_state_ids);
     }
 
     #[test]
@@ -952,7 +943,7 @@ mod tests {
         // build up the DAG
         let (state_at_bob, state_at_charlie, expected) = store.set_up();
 
-        let ev_map: EventMap<Arc<StateEvent>> = store.0.clone();
+        let ev_map: EventMap<StateEvent> = store.0.clone();
         let state_sets = [state_at_bob, state_at_charlie];
         let resolved = match crate::resolve(
             &RoomVersionId::Version2,
@@ -963,7 +954,7 @@ mod tests {
                     store.auth_event_ids(&room_id(), map.values().cloned().collect()).unwrap()
                 })
                 .collect(),
-            |id| ev_map.get(id).map(Arc::clone),
+            |id| ev_map.get(id),
         ) {
             Ok(state) => state,
             Err(e) => panic!("{}", e),
@@ -1056,7 +1047,7 @@ mod tests {
         })
         .collect::<StateMap<_>>();
 
-        let ev_map: EventMap<Arc<StateEvent>> = store.0.clone();
+        let ev_map: EventMap<StateEvent> = store.0.clone();
         let state_sets = [state_set_a, state_set_b];
         let resolved = match crate::resolve(
             &RoomVersionId::Version6,
@@ -1067,7 +1058,7 @@ mod tests {
                     store.auth_event_ids(&room_id(), map.values().cloned().collect()).unwrap()
                 })
                 .collect(),
-            |id| ev_map.get(id).map(Arc::clone),
+            |id| ev_map.get(id),
         ) {
             Ok(state) => state,
             Err(e) => panic!("{}", e),
@@ -1113,7 +1104,7 @@ mod tests {
     }
 
     #[allow(non_snake_case)]
-    fn BAN_STATE_SET() -> HashMap<EventId, Arc<StateEvent>> {
+    fn BAN_STATE_SET() -> HashMap<EventId, StateEvent> {
         vec![
             to_pdu_event(
                 "PA",
@@ -1158,7 +1149,7 @@ mod tests {
     }
 
     #[allow(non_snake_case)]
-    fn JOIN_RULE() -> HashMap<EventId, Arc<StateEvent>> {
+    fn JOIN_RULE() -> HashMap<EventId, StateEvent> {
         vec![
             to_pdu_event(
                 "JR",
