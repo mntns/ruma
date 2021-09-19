@@ -19,12 +19,12 @@ pub type AliasesEvent = StateEvent<AliasesEventContent>;
 #[ruma_event(type = "m.room.aliases", kind = State, custom_redacted)]
 pub struct AliasesEventContent {
     /// A list of room aliases.
-    pub aliases: Vec<RoomAliasId>,
+    pub aliases: Vec<Box<RoomAliasId>>,
 }
 
 impl AliasesEventContent {
     /// Create an `AliasesEventContent` from the given aliases.
-    pub fn new(aliases: Vec<RoomAliasId>) -> Self {
+    pub fn new(aliases: Vec<Box<RoomAliasId>>) -> Self {
         Self { aliases }
     }
 }
@@ -56,14 +56,14 @@ pub struct RedactedAliasesEventContent {
     ///
     /// According to the Matrix spec version 1 redaction rules allowed this field to be
     /// kept after redaction, this was changed in version 6.
-    pub aliases: Option<Vec<RoomAliasId>>,
+    pub aliases: Option<Vec<Box<RoomAliasId>>>,
 }
 
 impl RedactedAliasesEventContent {
     /// Create a `RedactedAliasesEventContent` with the given aliases.
     ///
     /// This is only valid for room version 5 and below.
-    pub fn new_v1(aliases: Vec<RoomAliasId>) -> Self {
+    pub fn new_v1(aliases: Vec<Box<RoomAliasId>>) -> Self {
         Self { aliases: Some(aliases) }
     }
 

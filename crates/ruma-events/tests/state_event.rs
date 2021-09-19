@@ -36,10 +36,12 @@ fn aliases_event_with_prev_content() -> JsonValue {
 #[test]
 fn serialize_aliases_with_prev_content() {
     let aliases_event = StateEvent {
-        content: AliasesEventContent::new(vec![room_alias_id!("#somewhere:localhost")]),
+        content: AliasesEventContent::new(vec![room_alias_id!("#somewhere:localhost").to_owned()]),
         event_id: event_id!("$h29iv0s8:example.com").to_owned(),
         origin_server_ts: MilliSecondsSinceUnixEpoch(uint!(1)),
-        prev_content: Some(AliasesEventContent::new(vec![room_alias_id!("#inner:localhost")])),
+        prev_content: Some(AliasesEventContent::new(vec![
+            room_alias_id!("#inner:localhost").to_owned()
+        ])),
         room_id: room_id!("!roomid:room.com"),
         sender: user_id!("@carl:example.com"),
         state_key: "".into(),
@@ -55,7 +57,7 @@ fn serialize_aliases_with_prev_content() {
 #[test]
 fn serialize_aliases_without_prev_content() {
     let aliases_event = StateEvent {
-        content: AliasesEventContent::new(vec![room_alias_id!("#somewhere:localhost")]),
+        content: AliasesEventContent::new(vec![room_alias_id!("#somewhere:localhost").to_owned()]),
         event_id: event_id!("$h29iv0s8:example.com").to_owned(),
         origin_server_ts: MilliSecondsSinceUnixEpoch(uint!(1)),
         prev_content: None,
