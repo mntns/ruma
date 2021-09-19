@@ -422,7 +422,7 @@ fn expand_from_into(
                 /// Convert this sync event into a full event, one with a room_id field.
                 pub fn into_full_event(
                     self,
-                    room_id: #ruma_identifiers::RoomId,
+                    room_id: ::std::boxed::Box<#ruma_identifiers::RoomId>,
                 ) -> #full_struct #ty_gen {
                     let Self { #( #fields, )* } = self;
                     #full_struct {

@@ -19,10 +19,10 @@ pub type DirectEvent = crate::GlobalAccountDataEvent<DirectEventContent>;
 #[derive(Clone, Debug, Deserialize, Serialize, EventContent)]
 #[allow(clippy::exhaustive_structs)]
 #[ruma_event(type = "m.direct", kind = GlobalAccountData)]
-pub struct DirectEventContent(pub BTreeMap<UserId, Vec<RoomId>>);
+pub struct DirectEventContent(pub BTreeMap<UserId, Vec<Box<RoomId>>>);
 
 impl Deref for DirectEventContent {
-    type Target = BTreeMap<UserId, Vec<RoomId>>;
+    type Target = BTreeMap<UserId, Vec<Box<RoomId>>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

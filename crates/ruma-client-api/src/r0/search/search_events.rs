@@ -368,7 +368,7 @@ pub struct ResultRoomEvents {
     /// The current state for every room in the results. This is included if the request had the
     /// `include_state` key set with a value of `true`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub state: BTreeMap<RoomId, Vec<Raw<AnyStateEvent>>>,
+    pub state: BTreeMap<Box<RoomId>, Vec<Raw<AnyStateEvent>>>,
 
     /// List of words which should be highlighted, useful for stemming which may
     /// change the query terms.
@@ -490,7 +490,7 @@ impl UserProfile {
 #[allow(clippy::exhaustive_enums)]
 pub enum RoomIdOrUserId {
     /// Represents a room ID.
-    RoomId(RoomId),
+    RoomId(Box<RoomId>),
 
     /// Represents a user ID.
     UserId(UserId),

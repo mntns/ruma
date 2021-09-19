@@ -23,12 +23,12 @@ pub struct TombstoneEventContent {
     pub body: String,
 
     /// The new room the client should be visiting.
-    pub replacement_room: RoomId,
+    pub replacement_room: Box<RoomId>,
 }
 
 impl TombstoneEventContent {
     /// Creates a new `TombstoneEventContent` with the given body and replacement room ID.
-    pub fn new(body: String, replacement_room: RoomId) -> Self {
+    pub fn new(body: String, replacement_room: Box<RoomId>) -> Self {
         Self { body, replacement_room }
     }
 }

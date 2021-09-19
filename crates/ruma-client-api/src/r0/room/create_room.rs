@@ -91,7 +91,7 @@ ruma_api! {
 
     response: {
         /// The created room's ID.
-        pub room_id: RoomId,
+        pub room_id: Box<RoomId>,
     }
 
     error: crate::Error
@@ -106,7 +106,7 @@ impl Request<'_> {
 
 impl Response {
     /// Creates a new `Response` with the given room id.
-    pub fn new(room_id: RoomId) -> Self {
+    pub fn new(room_id: Box<RoomId>) -> Self {
         Self { room_id }
     }
 }

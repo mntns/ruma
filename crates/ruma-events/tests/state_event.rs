@@ -42,7 +42,7 @@ fn serialize_aliases_with_prev_content() {
         prev_content: Some(AliasesEventContent::new(vec![
             room_alias_id!("#inner:localhost").to_owned()
         ])),
-        room_id: room_id!("!roomid:room.com"),
+        room_id: room_id!("!roomid:room.com").to_owned(),
         sender: user_id!("@carl:example.com"),
         state_key: "".into(),
         unsigned: Unsigned::default(),
@@ -61,7 +61,7 @@ fn serialize_aliases_without_prev_content() {
         event_id: event_id!("$h29iv0s8:example.com").to_owned(),
         origin_server_ts: MilliSecondsSinceUnixEpoch(uint!(1)),
         prev_content: None,
-        room_id: room_id!("!roomid:room.com"),
+        room_id: room_id!("!roomid:room.com").to_owned(),
         sender: user_id!("@carl:example.com"),
         state_key: "".into(),
         unsigned: Unsigned::default(),

@@ -1,6 +1,6 @@
 //! Matrix room identifiers.
 
-use std::{convert::TryFrom, fmt, num::NonZeroU8};
+use std::convert::TryInto;
 
 use crate::ServerName;
 
@@ -13,21 +13,15 @@ use crate::ServerName;
 /// # use std::convert::TryFrom;
 /// # use ruma_identifiers::RoomId;
 /// assert_eq!(
-///     RoomId::try_from("!n8f893n9:example.com").unwrap().as_ref(),
+///     <&RoomId>::try_from("!n8f893n9:example.com").unwrap().as_ref(),
 ///     "!n8f893n9:example.com"
 /// );
 /// ```
-#[derive(Clone)]
-pub struct RoomId {
-    pub(crate) full_id: Box<str>,
-    pub(crate) colon_idx: NonZeroU8,
-}
 
-impl fmt::Debug for RoomId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.full_id)
-    }
-}
+#[repr(transparent)]
+pub struct RoomId(str);
+
+opaque_identifier_validated!(RoomId, ruma_identifiers_validation::room_id::validate);
 
 impl RoomId {
     /// Attempts to generate a `RoomId` for the given origin server with a localpart consisting of
@@ -36,39 +30,26 @@ impl RoomId {
     /// Fails if the given homeserver cannot be parsed as a valid host.
     #[cfg(feature = "rand")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-    pub fn new(server_name: &ServerName) -> Self {
-        use crate::generate_localpart;
-
-        let full_id = format!("!{}:{}", generate_localpart(18), server_name).into();
-
-        Self { full_id, colon_idx: NonZeroU8::new(19).unwrap() }
+    pub fn new(server_name: &ServerName) -> Box<Self> {
+        Self::from_owned(format!("!{}:{}", crate::generate_localpart(18), server_name).into())
     }
 }
 
 impl RoomId {
     /// Returns the rooms's unique ID.
     pub fn localpart(&self) -> &str {
-        &self.full_id[1..self.colon_idx.get() as usize]
+        &self.as_str()[1..self.colon_idx()]
     }
 
     /// Returns the server name of the room ID.
     pub fn server_name(&self) -> &ServerName {
-        <&ServerName>::try_from(&self.full_id[self.colon_idx.get() as usize + 1..]).unwrap()
+        self.as_str()[self.colon_idx() + 1..].try_into().unwrap()
+    }
+
+    fn colon_idx(&self) -> usize {
+        self.as_str().find(':').unwrap()
     }
 }
-
-/// Attempts to create a new Matrix room ID from a string representation.
-///
-/// The string must include the leading ! sigil, the localpart, a literal colon, and a server name.
-fn try_from<S>(room_id: S) -> Result<RoomId, crate::Error>
-where
-    S: AsRef<str> + Into<Box<str>>,
-{
-    let colon_idx = ruma_identifiers_validation::room_id::validate(room_id.as_ref())?;
-    Ok(RoomId { full_id: room_id.into(), colon_idx })
-}
-
-common_impls!(RoomId, try_from, "a Matrix room ID");
 
 #[cfg(test)]
 mod tests {
@@ -80,7 +61,7 @@ mod tests {
     #[test]
     fn valid_room_id() {
         assert_eq!(
-            RoomId::try_from("!29fhd83h92h0:example.com")
+            <&RoomId>::try_from("!29fhd83h92h0:example.com")
                 .expect("Failed to create RoomId.")
                 .as_ref(),
             "!29fhd83h92h0:example.com"
@@ -90,7 +71,7 @@ mod tests {
     #[test]
     fn empty_localpart() {
         assert_eq!(
-            RoomId::try_from("!:example.com").expect("Failed to create RoomId.").as_ref(),
+            <&RoomId>::try_from("!:example.com").expect("Failed to create RoomId.").as_ref(),
             "!:example.com"
         );
     }
@@ -114,7 +95,7 @@ mod tests {
     fn serialize_valid_room_id() {
         assert_eq!(
             serde_json::to_string(
-                &RoomId::try_from("!29fhd83h92h0:example.com").expect("Failed to create RoomId.")
+                <&RoomId>::try_from("!29fhd83h92h0:example.com").expect("Failed to create RoomId.")
             )
             .expect("Failed to convert RoomId to JSON."),
             r#""!29fhd83h92h0:example.com""#
@@ -125,16 +106,16 @@ mod tests {
     #[test]
     fn deserialize_valid_room_id() {
         assert_eq!(
-            serde_json::from_str::<RoomId>(r#""!29fhd83h92h0:example.com""#)
+            serde_json::from_str::<Box<RoomId>>(r#""!29fhd83h92h0:example.com""#)
                 .expect("Failed to convert JSON to RoomId"),
-            RoomId::try_from("!29fhd83h92h0:example.com").expect("Failed to create RoomId.")
+            <&RoomId>::try_from("!29fhd83h92h0:example.com").expect("Failed to create RoomId.")
         );
     }
 
     #[test]
     fn valid_room_id_with_explicit_standard_port() {
         assert_eq!(
-            RoomId::try_from("!29fhd83h92h0:example.com:443")
+            <&RoomId>::try_from("!29fhd83h92h0:example.com:443")
                 .expect("Failed to create RoomId.")
                 .as_ref(),
             "!29fhd83h92h0:example.com:443"
@@ -144,7 +125,7 @@ mod tests {
     #[test]
     fn valid_room_id_with_non_standard_port() {
         assert_eq!(
-            RoomId::try_from("!29fhd83h92h0:example.com:5000")
+            <&RoomId>::try_from("!29fhd83h92h0:example.com:5000")
                 .expect("Failed to create RoomId.")
                 .as_ref(),
             "!29fhd83h92h0:example.com:5000"
@@ -153,23 +134,26 @@ mod tests {
 
     #[test]
     fn missing_room_id_sigil() {
-        assert_eq!(RoomId::try_from("carl:example.com").unwrap_err(), Error::MissingLeadingSigil);
+        assert_eq!(
+            <&RoomId>::try_from("carl:example.com").unwrap_err(),
+            Error::MissingLeadingSigil
+        );
     }
 
     #[test]
     fn missing_room_id_delimiter() {
-        assert_eq!(RoomId::try_from("!29fhd83h92h0").unwrap_err(), Error::MissingDelimiter);
+        assert_eq!(<&RoomId>::try_from("!29fhd83h92h0").unwrap_err(), Error::MissingDelimiter);
     }
 
     #[test]
     fn invalid_room_id_host() {
-        assert_eq!(RoomId::try_from("!29fhd83h92h0:/").unwrap_err(), Error::InvalidServerName);
+        assert_eq!(<&RoomId>::try_from("!29fhd83h92h0:/").unwrap_err(), Error::InvalidServerName);
     }
 
     #[test]
     fn invalid_room_id_port() {
         assert_eq!(
-            RoomId::try_from("!29fhd83h92h0:example.com:notaport").unwrap_err(),
+            <&RoomId>::try_from("!29fhd83h92h0:example.com:notaport").unwrap_err(),
             Error::InvalidServerName
         );
     }

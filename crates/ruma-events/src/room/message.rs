@@ -1219,10 +1219,8 @@ fn formatted_or_plain_body<'a>(formatted: &'a Option<FormattedBody>, body: &'a s
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryFrom;
-
     use matches::assert_matches;
-    use ruma_identifiers::{event_id, EventId, RoomId, UserId};
+    use ruma_identifiers::{event_id, room_id, user_id, EventId};
     use serde_json::{from_value as from_json_value, json};
 
     use super::{InReplyTo, MessageEvent, MessageEventContent, MessageType, Relation};
@@ -1252,14 +1250,14 @@ mod tests {
 
     #[test]
     fn plain_quote_fallback_multiline() {
-        let sender = UserId::try_from("@alice:example.com").unwrap();
+        let sender = user_id!("@alice:example.com");
         assert_eq!(
             super::get_plain_quote_fallback(&MessageEvent {
                 content: MessageEventContent::text_plain("multi\nline"),
                 event_id: EventId::new(sender.server_name()),
-                sender,
+                sender: sender.to_owned(),
                 origin_server_ts: ruma_common::MilliSecondsSinceUnixEpoch::now(),
-                room_id: RoomId::try_from("!n8f893n9:example.com").unwrap(),
+                room_id: room_id!("!n8f893n9:example.com").to_owned(),
                 unsigned: crate::Unsigned::new(),
             }),
             "> <@alice:example.com> multi\n> line"
